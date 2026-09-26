@@ -45,7 +45,7 @@ theorem DA_step_proposal_info (p : Profile M W) (s s₂ : DAState M W)
     let m := Classical.choose ‹(activeMen s).Nonempty›
     have hm : m ∈ activeMen s := Classical.choose_spec ‹(activeMen s).Nonempty›
     have hmAvail : ∃ w, (m, w) ∉ s.proposed := by
-      simpa [activeMen] using hm
+      exact (mem_activeMen_iff s m).mp hm |>.2
     have hCandidates : (unproposedWomen s m).Nonempty := by
       rcases hmAvail with ⟨w, hw⟩
       exact ⟨w, by simpa [unproposedWomen] using hw⟩
@@ -72,7 +72,9 @@ theorem DA_step_held_info (p : Profile M W) (s s₂ : DAState M W)
       (match s.held w with
        | none => kept = m
        | some old => (kept = m ∧ p.prefW w m old) ∨
-           (kept = old ∧ ¬ p.prefW w m old)) := by
+           (kept = old ∧ ¬ p.prefW w m old)) ∧
+      (m, w) ∉ s.proposed ∧ s₂.proposed = insert (m, w) s.proposed ∧
+      (∀ w', s.held w' ≠ some m) ∧ nextWoman p s m = some w := by
   classical
   unfold DA_step at h
   split at h
@@ -80,17 +82,20 @@ theorem DA_step_held_info (p : Profile M W) (s s₂ : DAState M W)
     obtain ⟨rfl, rfl⟩ := h
     let m := Classical.choose ‹(activeMen s).Nonempty›
     have hm : m ∈ activeMen s := Classical.choose_spec ‹(activeMen s).Nonempty›
+    have hmInfo := (mem_activeMen_iff s m).mp hm
     have hmAvail : ∃ w, (m, w) ∉ s.proposed := by
-      simpa [activeMen] using hm
+      exact (mem_activeMen_iff s m).mp hm |>.2
     have hCandidates : (unproposedWomen s m).Nonempty := by
       rcases hmAvail with ⟨w, hw⟩
       exact ⟨w, by simpa [unproposedWomen] using hw⟩
     let hNext := nextWoman_spec p s m hCandidates
     let w := Classical.choose hNext
+    have hNextValue : nextWoman p s m = some w := (Classical.choose_spec hNext).1
+    have hAvailable : w ∈ unproposedWomen s m := (Classical.choose_spec hNext).2
     let current := (s.held w).getD m
     let decision : Decidable (p.prefW w m current) := p.decPrefW w m current
     let kept := @ite M (p.prefW w m current) decision m current
-    refine ⟨m, w, kept, ?_, ?_, ?_⟩
+    refine ⟨m, w, kept, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · change (if w = w then some kept else s.held w) = some kept
       simp
     · intro w' hw'
@@ -104,6 +109,10 @@ theorem DA_step_held_info (p : Profile M W) (s s₂ : DAState M W)
             simp [current, kept, hcur, hp]
           · right
             simp [current, kept, hcur, hp]
+    · simpa [unproposedWomen] using hAvailable
+    · rfl
+    · exact hmInfo.1
+    · exact hNextValue
   · cases h
 
 /-- Successful steps preserve all old proposals. -/
@@ -140,7 +149,8 @@ theorem DA_step_women_only_trade_up (p : Profile M W) (s s₂ : DAState M W)
     (hstep : DA_step p s = some s₂) (w : W) (m₁ : M)
     (hheld : s.held w = some m₁) :
     ∃ m₂, s₂.held w = some m₂ ∧ (m₂ = m₁ ∨ p.prefW w m₂ m₁) := by
-  obtain ⟨m, wNext, kept, hkept, hsame, hchoice⟩ := DA_step_held_info p s s₂ hstep
+  obtain ⟨m, wNext, kept, hkept, hsame, hchoice, _, _, _, _⟩ :=
+    DA_step_held_info p s s₂ hstep
   by_cases hw : w = wNext
   · subst w
     cases hcur : s.held wNext with

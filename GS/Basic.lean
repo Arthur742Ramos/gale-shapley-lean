@@ -101,10 +101,17 @@ structure DAState (M W : Type*) where
   held : W → Option M
   proposed : Finset (M × W)
 
-/-- Men who still have at least one woman to whom they have not proposed. -/
+/-- Unheld men who still have at least one woman to whom they have not proposed. -/
 def activeMen (s : DAState M W) : Finset M := by
   classical
-  exact Finset.univ.filter (fun m => ∃ w, (m, w) ∉ s.proposed)
+  exact Finset.univ.filter (fun m =>
+    (∀ w, s.held w ≠ some m) ∧ ∃ w, (m, w) ∉ s.proposed)
+
+omit [Nonempty M] [Nonempty W] in
+theorem mem_activeMen_iff (s : DAState M W) (m : M) :
+    m ∈ activeMen s ↔ (∀ w, s.held w ≠ some m) ∧ ∃ w, (m, w) ∉ s.proposed := by
+  classical
+  simp [activeMen]
 
 /-- The women to whom `m` has not yet proposed. -/
 def unproposedWomen (s : DAState M W) (m : M) : Finset W := by
@@ -173,7 +180,7 @@ noncomputable def DA_step (p : Profile M W) (s : DAState M W) : Option (DAState 
     let m := Classical.choose hActive
     let hm : m ∈ activeMen s := Classical.choose_spec hActive
     let hmAvail : ∃ w, (m, w) ∉ s.proposed := by
-      simpa [activeMen] using hm
+      exact (mem_activeMen_iff s m).mp hm |>.2
     let hCandidates : (unproposedWomen s m).Nonempty := by
       let w := Classical.choose hmAvail
       have hw : (m, w) ∉ s.proposed := Classical.choose_spec hmAvail
@@ -204,7 +211,7 @@ theorem DA_step_inserts_unproposed (p : Profile M W) (s s₂ : DAState M W)
     let m := Classical.choose ‹(activeMen s).Nonempty›
     let hm : m ∈ activeMen s := Classical.choose_spec ‹(activeMen s).Nonempty›
     have hmAvail : ∃ w, (m, w) ∉ s.proposed := by
-      simpa [activeMen] using hm
+      exact (mem_activeMen_iff s m).mp hm |>.2
     have hCandidates : (unproposedWomen s m).Nonempty := by
       rcases hmAvail with ⟨w, hw⟩
       exact ⟨w, by simpa [unproposedWomen] using hw⟩
@@ -223,7 +230,7 @@ def initialState : DAState M W where
   held := fun _ => none
   proposed := ∅
 
-/-- A state is quiescent when every man has exhausted his proposal list. -/
+/-- A state is quiescent when no unheld man has an unproposed woman left. -/
 def IsQuiescent (s : DAState M W) : Prop := activeMen s = ∅
 
 end

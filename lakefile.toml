@@ -1,6 +1,6 @@
 name = "gale-shapley"
 version = "0.1.0"
-defaultTargets = ["GaleShapley"]
+defaultTargets = ["GS.Stability"]
 
 [[require]]
 name = "mathlib"
