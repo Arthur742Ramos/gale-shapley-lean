@@ -1,0 +1,10 @@
+name = "gale-shapley"
+version = "0.1.0"
+defaultTargets = ["gale-shapley"]
+
+[[lean_lib]]
+name = "GaleShapley"
+
+[[lean_exe]]
+name = "gale-shapley"
+root = "Main"
