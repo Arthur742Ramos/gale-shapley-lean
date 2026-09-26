@@ -135,6 +135,73 @@ esac
 
 lake build Challenge Solution
 
+# Reproduce Palomar's standalone Challenge compilation: Lean runs in a fresh
+# directory with Mathlib and Lean on LEAN_PATH, but without the project's own
+# compiled modules.
+toolchain_entry=$(tr -d '[:space:]' < lean-toolchain)
+toolchain_dir_name=$(printf '%s' "$toolchain_entry" | sed 's@/@--@g; s@:@---@g')
+standalone_lean="/home/hatch/.elan/toolchains/$toolchain_dir_name/bin/lean"
+if [ ! -x "$standalone_lean" ]; then
+  echo "error: pinned toolchain Lean binary is missing: $standalone_lean" >&2
+  exit 1
+fi
+
+lake_lean_path=$(lake env printenv LEAN_PATH)
+restricted_lean_path=$(python3 - "$repository_root/.lake/build/lib/lean" "$lake_lean_path" <<'PY'
+import os
+import pathlib
+import sys
+
+project_lib = pathlib.Path(sys.argv[1]).resolve()
+entries = sys.argv[2].split(os.pathsep)
+kept = []
+removed = 0
+for entry in entries:
+    if pathlib.Path(entry or ".").resolve() == project_lib:
+        removed += 1
+    elif entry:
+        kept.append(entry)
+if not removed:
+    raise SystemExit(f"error: project Lean library path was not present in lake LEAN_PATH: {project_lib}")
+print(os.pathsep.join(kept))
+PY
+)
+
+standalone_tmpdir="$check_tmpdir/standalone-challenge"
+mkdir "$standalone_tmpdir"
+cp Challenge.lean "$standalone_tmpdir/Challenge.lean"
+echo "Standalone Challenge compilation:"
+if ! (cd "$standalone_tmpdir" && LEAN_PATH="$restricted_lean_path" "$standalone_lean" Challenge.lean) \
+    >"$check_tmpdir/standalone-challenge.out" 2>&1; then
+  cat "$check_tmpdir/standalone-challenge.out" >&2
+  exit 1
+fi
+cat "$check_tmpdir/standalone-challenge.out"
+echo "Standalone Challenge compilation passed."
+
+if ! lake env lean --src-deps Challenge.lean >"$check_tmpdir/challenge-src-deps.txt" 2>&1; then
+  cat "$check_tmpdir/challenge-src-deps.txt" >&2
+  exit 1
+fi
+python3 - "$check_tmpdir/challenge-src-deps.txt" <<'PY'
+import pathlib
+import re
+import sys
+
+deps_file = pathlib.Path(sys.argv[1])
+paths = [line.strip() for line in deps_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+if not paths:
+    raise SystemExit("error: lake reported no Challenge source dependencies")
+bad = []
+for raw in paths:
+    path = pathlib.Path(raw).resolve().as_posix()
+    if not (re.search(r"/src/lean/", path) or re.search(r"/.lake/packages/mathlib/", path)):
+        bad.append(raw)
+if bad:
+    raise SystemExit("error: Challenge imports source files outside the Lean/Mathlib allowlist:\n" + "\n".join(bad))
+print(f"Challenge import-source allowlist passed ({len(paths)} source files).")
+PY
+
 python3 - "$check_tmpdir" <<'PY'
 import json
 import pathlib
