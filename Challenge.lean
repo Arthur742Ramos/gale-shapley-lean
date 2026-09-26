@@ -6,8 +6,6 @@ universe u v
 
 namespace GS.Palomar
 
-namespace Implementation
-
 section
 
 variable {M W : Type*}
@@ -17,9 +15,7 @@ variable {M W : Type*}
 /-- The men-proposing deferred-acceptance procedure has a stable outcome. -/
 theorem galeShapley (p : Profile M W) :
     ∃ μ : Matching M W, IsStable p μ := by
-  obtain ⟨s, hquiet, _, hreach⟩ := exists_quiescent p
-  exact ⟨terminalMatching p s hreach,
-    stability_of_quiescent p hquiet hreach⟩
+  sorry
 
 /-- The run from the initial state terminates quiescently, and its terminal
 matching is stable. -/
@@ -28,23 +24,16 @@ theorem daStable (p : Profile M W) :
     IsQuiescent s ∧
       IsStable p
         (terminalMatching p s (run_reachable p initialState)) := by
-  dsimp
-  exact ⟨run_quiescent p initialState,
-    stability_of_quiescent p (run_quiescent p initialState)
-      (run_reachable p initialState)⟩
+  sorry
 
-/-- Every stable-achievable partner is weakly below a man's partner in the
-men-proposing deferred-acceptance outcome. -/
+/-- Whenever a man is matched to w0 by the deferred-acceptance outcome, every stable-achievable partner is weakly below w0 in his preferences. -/
 theorem daMenOptimal (p : Profile M W) (m : M) {w₀ : W}
     (hterminal :
       (terminalMatching p (run p initialState)
         (run_reachable p initialState)).muM m = some w₀) :
     ∀ w : W, Achievable p m w → p.prefM m w₀ w ∨ w₀ = w := by
-  intro w hachievable
-  exact men_optimal p (run_reachable p initialState) m hterminal hachievable
+  sorry
 
 end
-
-end Implementation
 
 end GS.Palomar

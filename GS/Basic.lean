@@ -234,3 +234,37 @@ def initialState : DAState M W where
 def IsQuiescent (s : DAState M W) : Prop := activeMen s = ∅
 
 end
+
+namespace GS.Palomar
+
+/-- A two-sided profile, reusing the project structure with decidable, strict
+preferences for each participant. -/
+def Profile (M W : Type*) : Type _ := _root_.Profile M W
+
+/-- A matching is represented by mutually inverse optional partner maps. -/
+def Matching (M W : Type*) : Type _ := _root_.Matching M W
+
+/-- A partner is preferred to being unmatched. -/
+def prefersM {M W : Type*} (p : Profile M W) (m : M) (w : W)
+    (cur : Option W) : Prop :=
+  _root_.prefersM p m w cur
+
+/-- A partner is preferred to being unmatched. -/
+def prefersW {M W : Type*} (p : Profile M W) (w : W) (m : M)
+    (cur : Option M) : Prop :=
+  _root_.prefersW p w m cur
+
+/-- A pair blocks when both participants prefer each other to their current partners. -/
+def IsBlockingPair {M W : Type*} (p : Profile M W) (mu : Matching M W)
+    (m : M) (w : W) : Prop :=
+  prefersM p m w (mu.muM m) ∧ prefersW p w m (mu.muW w)
+
+/-- A matching is stable when it has no blocking pair. -/
+def IsStable {M W : Type*} (p : Profile M W) (mu : Matching M W) : Prop :=
+  ∀ m w, ¬ IsBlockingPair p mu m w
+
+/-- A partner is achievable when some stable matching assigns that partner. -/
+def Achievable {M W : Type*} (p : Profile M W) (m : M) (w : W) : Prop :=
+  ∃ mu : Matching M W, IsStable p mu ∧ mu.muM m = some w
+
+end GS.Palomar

@@ -1,0 +1,24 @@
+{
+  "challenge_module": "Challenge",
+  "definition_names": [
+    "GS.Palomar.Profile",
+    "GS.Palomar.Matching",
+    "GS.Palomar.prefersM",
+    "GS.Palomar.prefersW",
+    "GS.Palomar.IsBlockingPair",
+    "GS.Palomar.IsStable",
+    "GS.Palomar.Achievable"
+  ],
+  "enable_nanoda": true,
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ],
+  "solution_module": "Solution",
+  "theorem_names": [
+    "GS.Palomar.galeShapley",
+    "GS.Palomar.daStable",
+    "GS.Palomar.daMenOptimal"
+  ]
+}

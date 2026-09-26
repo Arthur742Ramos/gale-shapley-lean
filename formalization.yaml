@@ -1,0 +1,186 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mathlib-initiative/formalization.yaml/main/schema/formalization.schema.json
+version: "v0.4"
+
+project:
+  name: "gale-shapley-lean"
+  description: >-
+    A Lean formalization of men-proposing deferred acceptance for finite,
+    two-sided matching markets. It proves existence of a stable matching,
+    termination of the specified run at a stable matching, and conditional
+    weak optimality: whenever a man is matched by the deferred-acceptance
+    outcome to a partner w0, he weakly prefers w0 to every woman with whom some
+    stable matching pairs him.
+    Preferences on each side are decidable, irreflexive, transitive, and total
+    on distinct alternatives. The model treats `none` as worse than every
+    partner in `prefersM` and `prefersW`, and has no separate acceptability
+    condition. The market sides need not have equal cardinality; the women type
+    is nonempty.
+  authors:
+    - "Arthur Freitas Ramos"
+  responsible_maintainers:
+    - "Arthur Freitas Ramos"
+  license: "BSD-3-Clause"
+
+sources:
+  - title: "College Admissions and the Stability of Marriage"
+    authors:
+      - "D. Gale"
+      - "L. S. Shapley"
+    id: "https://doi.org/10.1080/00029890.1962.11989827"
+    type: "article"
+    location: "The American Mathematical Monthly, 69(1), 9–15 (1962)"
+    relationship: "formalizes"
+    author_endorsement: "not-contacted"
+    note: >-
+      Source for stable matching existence and deferred acceptance. The Lean
+      development gives an explicit finite implementation and also proves
+      men-optimality for the stable partners represented by `Achievable`.
+
+# A targeted Palomar site search on 2026-09-26 for Gale–Shapley, stable
+# matching, and deferred acceptance did not locate a prior entry for this
+# theorem. The registry feed endpoint was not accessible during that search.
+related_formalizations: []
+
+classification:
+  arxiv:
+    - "cs.GT"
+
+status:
+  scope: >-
+    The model uses finite participant types with decidable equality and
+    decidable strict preferences. Each preference relation is irreflexive,
+    transitive, and compares every pair of distinct alternatives. Matching
+    partner maps are optional and mutually inverse. No equal-size assumption
+    or separate acceptability condition is imposed. The existence and
+    termination theorems require the women type to be nonempty.
+  sorry_count: 0
+  sorry_in_definitions: 0
+  axioms:
+    - "propext"
+    - "Classical.choice"
+    - "Quot.sound"
+  main_results:
+    - declaration: "GS.Palomar.galeShapley"
+      file: "Solution.lean"
+      description: >-
+        For any profile under the stated finite-type assumptions, there is a
+        matching with no blocking pair.
+      sorry_count: 0
+      axioms: ["propext", "Classical.choice", "Quot.sound"]
+      comparator_config: "comparator.json"
+    - declaration: "GS.Palomar.daStable"
+      file: "Solution.lean"
+      description: >-
+        The run from `initialState` reaches a quiescent state whose terminal
+        matching is stable.
+      sorry_count: 0
+      axioms: ["propext", "Classical.choice", "Quot.sound"]
+      comparator_config: "comparator.json"
+    - declaration: "GS.Palomar.daMenOptimal"
+      file: "Solution.lean"
+      description: >-
+        If a man receives a partner in the deferred-acceptance outcome, he
+        weakly prefers that partner to every woman with whom some stable
+        matching pairs him.
+      sorry_count: 0
+      axioms: ["propext", "Classical.choice", "Quot.sound"]
+      comparator_config: "comparator.json"
+
+automation:
+  methods:
+    - method: "agent"
+      models:
+        - "GPT-6-Luna via Codex"
+      framework: "Lean 4 v4.35.0-rc2 and Mathlib v4.35.0-rc2"
+      tool_setup: >-
+        The Lean toolchain is pinned by `lean-toolchain`, and Mathlib is pinned
+        in `lakefile.toml` and `lake-manifest.json`.
+      cost:
+        wall_time: "not tracked"
+        spend_usd: "subscription-based"
+        hardware: "local machine"
+      prompting_notes: >-
+        The checked proof terms are accepted by Lean's kernel; the Challenge
+        module contains only the three intended theorem statement holes.
+  spend_usd: "subscription-based"
+  notes: >-
+    AI assistance was used for proof engineering. No Palomar submission or
+    registration was performed as part of this packaging step.
+
+fidelity:
+  divergences: >-
+    This formalization is for finite one-to-one matching markets with complete
+    strict preferences and optional partners. In contrast to some textbook
+    statements, it explicitly permits unequal side sizes and unmatched agents;
+    the women type is assumed nonempty by the main theorems. The `none` case
+    is represented as worse than every partner, and no separate acceptability
+    predicate is part of stability.
+
+alignment:
+  namespace: "GS.Palomar"
+  statements:
+    - source: "Profile of strict preferences"
+      lean: "GS.Palomar.Profile"
+      module: "GS/Basic.lean"
+      status: "defined"
+      note: >-
+        A named type definition reusing the `Profile` structure, whose fields
+        are `prefM`, `prefW`, `irreflM`, `transM`, `totalM`, `irreflW`,
+        `transW`, and `totalW`, with decidability witnesses for both relations.
+    - source: "Matching"
+      lean: "GS.Palomar.Matching"
+      module: "GS/Basic.lean"
+      status: "defined"
+      note: >-
+        A named type definition reusing the `Matching` structure with optional
+        partner maps and both directions of inverse consistency.
+    - source: "None-as-worst preference"
+      lean: "GS.Palomar.prefersM; GS.Palomar.prefersW"
+      module: "GS/Basic.lean"
+      status: "defined"
+      note: >-
+        Each relation is true against `none`; against `some partner` it uses
+        the participant's strict preference relation.
+    - source: "Blocking pair and stability"
+      lean: "GS.Palomar.IsBlockingPair; GS.Palomar.IsStable"
+      module: "GS/Basic.lean"
+      status: "defined"
+      note: >-
+        A blocking pair requires both participants to prefer each other to
+        their current partners; stability excludes every blocking pair.
+    - source: "Gale–Shapley stable matching existence"
+      lean: "GS.Palomar.galeShapley"
+      module: "Solution.lean"
+      status: "proved"
+      note: >-
+        Exact binders: `p : Profile M W` with finite types, decidable
+        equality, and `Nonempty W`; concludes existence of `μ : Matching M W`
+        with `IsStable p μ`.
+    - source: "Deferred-acceptance termination and stability"
+      lean: "GS.Palomar.daStable"
+      module: "Solution.lean"
+      status: "proved"
+      note: >-
+        Exact binders as above; the run from `initialState` is quiescent and
+        its `terminalMatching` is stable.
+    - source: "Men-optimality of deferred acceptance"
+      lean: "GS.Palomar.daMenOptimal"
+      module: "Solution.lean"
+      status: "proved"
+      note: >-
+        Exact binders: `p`, `m`, terminal partner `w₀`, and the hypothesis
+        that the terminal matching assigns `w₀` to `m`; every `Achievable`
+        partner `w` satisfies `p.prefM m w₀ w ∨ w₀ = w`.
+
+review:
+  status: "self-assessed"
+  reviewers:
+    - "none"
+  notes: >-
+    Local compilation, comparator declaration checks, placeholder scanning,
+    and the `#print axioms` audit are recorded by `scripts/verify-palomar.sh`.
+    No external or registry review is claimed.
+
+acknowledgements: >-
+  Mathlib contributors, David Gale and Lloyd S. Shapley for the source result,
+  and the Palomar Registry project for the statement and solution workflow.

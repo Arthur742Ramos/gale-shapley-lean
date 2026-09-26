@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repository_root"
+
+if [ -d "$HOME/.elan/bin" ]; then
+  export PATH="$HOME/.elan/bin:$PATH"
+fi
+
+command -v lake >/dev/null 2>&1 || {
+  echo "error: lake is required" >&2
+  exit 1
+}
+command -v python3 >/dev/null 2>&1 || {
+  echo "error: python3 is required" >&2
+  exit 1
+}
+command -v elan >/dev/null 2>&1 || {
+  echo "error: elan is required to locate the pinned Lean toolchain" >&2
+  exit 1
+}
+
+toolchain_lean=$(elan which lean)
+toolchain_root=$(dirname -- "$(dirname -- "$toolchain_lean")")
+export LAKE_HOME="$toolchain_root"
+export LEAN_SYSROOT="$toolchain_root"
+export LEAN="$toolchain_root/bin/lean"
+export PATH="$toolchain_root/bin:$PATH"
+
+for required_file in \
+  lakefile.toml lean-toolchain lake-manifest.json comparator.json \
+  formalization.yaml Challenge.lean Solution.lean LICENSE; do
+  if [ ! -f "$required_file" ] || [ -L "$required_file" ]; then
+    echo "error: required Palomar file is missing or not regular: $required_file" >&2
+    exit 1
+  fi
+done
+
+python3 - <<'PY'
+import json
+import pathlib
+
+config = json.loads(pathlib.Path("comparator.json").read_text(encoding="utf-8"))
+expected_theorems = [
+    "GS.Palomar.galeShapley",
+    "GS.Palomar.daStable",
+    "GS.Palomar.daMenOptimal",
+]
+expected_definitions = [
+    "GS.Palomar.Profile",
+    "GS.Palomar.Matching",
+    "GS.Palomar.prefersM",
+    "GS.Palomar.prefersW",
+    "GS.Palomar.IsBlockingPair",
+    "GS.Palomar.IsStable",
+    "GS.Palomar.Achievable",
+]
+if config.get("challenge_module") != "Challenge":
+    raise SystemExit("error: comparator challenge_module must be Challenge")
+if config.get("solution_module") != "Solution":
+    raise SystemExit("error: comparator solution_module must be Solution")
+if config.get("theorem_names") != expected_theorems:
+    raise SystemExit(f"error: unexpected theorem_names: {config.get('theorem_names')}")
+if config.get("definition_names") != expected_definitions:
+    raise SystemExit(f"error: unexpected definition_names: {config.get('definition_names')}")
+if set(config.get("permitted_axioms", [])) != {
+    "propext", "Classical.choice", "Quot.sound"
+}:
+    raise SystemExit("error: permitted_axioms must be propext, Classical.choice, and Quot.sound")
+
+challenge = pathlib.Path("Challenge.lean").read_text(encoding="utf-8")
+if challenge.split().count("sorry") != 3:
+    raise SystemExit("error: Challenge.lean must contain exactly three theorem statement holes")
+
+for path in [pathlib.Path("Solution.lean"), *sorted(pathlib.Path("GS").rglob("*.lean"))]:
+    source = path.read_text(encoding="utf-8")
+    if "sorry" in source:
+        raise SystemExit(f"error: sorry found in {path}")
+PY
+
+check_tmpdir=$(mktemp -d)
+trap 'rm -rf -- "$check_tmpdir"' EXIT
+
+# In the managed exec namespace Lean may see a host PID in /proc/<pid>/exe.
+# Redirect those reads to the current process so Lean can locate its sysroot.
+cat >"$check_tmpdir/lean-proc-self.c" <<'C'
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <stddef.h>
+#include <string.h>
+#include <unistd.h>
+
+static int is_proc_pid_exe(const char *path) {
+  if (path == NULL || strncmp(path, "/proc/", 6) != 0) return 0;
+  const char *p = path + 6;
+  if (*p < '0' || *p > '9') return 0;
+  while (*p >= '0' && *p <= '9') ++p;
+  return strcmp(p, "/exe") == 0;
+}
+
+ssize_t readlink(const char *path, char *buffer, size_t size) {
+  static ssize_t (*real_readlink)(const char *, char *, size_t);
+  if (real_readlink == NULL) real_readlink = dlsym(RTLD_NEXT, "readlink");
+  if (is_proc_pid_exe(path)) path = "/proc/self/exe";
+  return real_readlink(path, buffer, size);
+}
+
+ssize_t readlinkat(int dirfd, const char *path, char *buffer, size_t size) {
+  static ssize_t (*real_readlinkat)(int, const char *, char *, size_t);
+  if (real_readlinkat == NULL) real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
+  if (dirfd == AT_FDCWD && is_proc_pid_exe(path)) path = "/proc/self/exe";
+  return real_readlinkat(dirfd, path, buffer, size);
+}
+C
+command -v cc >/dev/null 2>&1 || {
+  echo "error: cc is required to prepare the local Lean process shim" >&2
+  exit 1
+}
+cc -shared -fPIC -o "$check_tmpdir/lean-proc-self.so" \
+  "$check_tmpdir/lean-proc-self.c" -ldl
+export LD_PRELOAD="$check_tmpdir/lean-proc-self.so${LD_PRELOAD:+:$LD_PRELOAD}"
+
+lake_version=$(lake --version)
+expected_version=$(tr -d '[:space:]' < lean-toolchain | sed 's@^leanprover/lean4:@@')
+expected_lean_version=${expected_version#v}
+case "$lake_version" in
+  *"$expected_version"*|*"Lean version $expected_lean_version"*) ;;
+  *)
+    echo "error: lake does not match lean-toolchain $expected_version: $lake_version" >&2
+    exit 1
+    ;;
+esac
+
+lake build Challenge Solution
+
+python3 - "$check_tmpdir" <<'PY'
+import json
+import pathlib
+import sys
+
+config = json.loads(pathlib.Path("comparator.json").read_text(encoding="utf-8"))
+temp = pathlib.Path(sys.argv[1])
+names = config["definition_names"] + config["theorem_names"]
+
+for module in ("Challenge", "Solution"):
+    checks = temp / f"{module}Check.lean"
+    lines = [f"import {module}", ""]
+    lines.extend(f"#check @{name}" for name in names)
+    lines.extend(["", "open Lean", "", "run_cmd do", "  let env ← getEnv"])
+    for name in config["definition_names"]:
+        lines.extend([
+            f"  match env.find? `{name} with",
+            "  | some (.defnInfo _) => pure ()",
+            f"  | some _ => throwError \"comparator definition is not a def: {name}\"",
+            f"  | none => throwError \"missing comparator definition: {name}\"",
+        ])
+    for name in config["theorem_names"]:
+        lines.extend([
+            f"  match env.find? `{name} with",
+            "  | some (.thmInfo _) => pure ()",
+            f"  | some _ => throwError \"comparator theorem is not a theorem: {name}\"",
+            f"  | none => throwError \"missing comparator theorem: {name}\"",
+        ])
+    checks.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+axioms = temp / "AxiomCheck.lean"
+axiom_lines = ["import Solution", ""]
+axiom_lines.extend(f"#print axioms {name}" for name in config["theorem_names"])
+axioms.write_text("\n".join(axiom_lines) + "\n", encoding="utf-8")
+PY
+
+lake env lean "$check_tmpdir/ChallengeCheck.lean"
+lake env lean "$check_tmpdir/SolutionCheck.lean"
+
+if ! lake env lean "$check_tmpdir/AxiomCheck.lean" >"$check_tmpdir/axioms.out" 2>&1; then
+  cat "$check_tmpdir/axioms.out" >&2
+  exit 1
+fi
+cat "$check_tmpdir/axioms.out"
+
+python3 - "$check_tmpdir/axioms.out" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+config = json.loads(pathlib.Path("comparator.json").read_text(encoding="utf-8"))
+output = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+allowed = set(config["permitted_axioms"])
+for theorem in config["theorem_names"]:
+    quoted_name = re.escape(theorem)
+    no_axioms = re.search(
+        rf"'{quoted_name}' does not depend on any axioms", output
+    )
+    report = re.search(
+        rf"'{quoted_name}' depends on axioms:\s*\[([^\]]*)\]", output
+    )
+    if bool(no_axioms) == bool(report):
+        raise SystemExit(f"error: missing or duplicate #print axioms report for {theorem}")
+    raw_axioms = "" if no_axioms else report.group(1)
+    axioms = {name.strip() for name in raw_axioms.split(",") if name.strip()}
+    extra = axioms - allowed
+    if extra:
+        raise SystemExit(f"error: {theorem} uses disallowed axioms: {sorted(extra)}")
+    print(f"Axiom audit passed for {theorem}: {', '.join(sorted(axioms)) or 'none'}")
+PY
+
+git diff --check
+echo "Local Palomar declaration, build, axiom, and sorry checks passed."
