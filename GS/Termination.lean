@@ -249,14 +249,20 @@ theorem men_propose_decreasing (p : Profile M W) {s : DAState M W}
     exact p.irreflM m w₁ (p.transM m w₁ w₂ w₁ hpreferred hreverse)
   exact ⟨hpreferred, hne, hnotReverse⟩
 
+/-- Execute at most `n` deferred-acceptance proposal steps. -/
+noncomputable def runFuel (p : Profile M W) (n : Nat) (s : DAState M W) :
+    DAState M W :=
+  Nat.rec (motive := fun _ => DAState M W → DAState M W)
+    (fun s => s)
+    (fun n ih s =>
+      match DA_step p s with
+      | none => s
+      | some s₂ => ih s₂)
+    n s
+
 /-- Run deferred acceptance until no man has any unproposed woman left. -/
 noncomputable def run (p : Profile M W) (s : DAState M W) : DAState M W :=
-  match _h : DA_step p s with
-  | none => s
-  | some s₂ => run p s₂
-termination_by terminationMeasure s
-decreasing_by
-  exact terminationMeasure_decreases p s s₂ _h
+  runFuel p (terminationMeasure s + 1) s
 
 theorem DA_step_none_iff_quiescent (p : Profile M W) (s : DAState M W) :
     DA_step p s = none ↔ IsQuiescent s := by
@@ -268,27 +274,65 @@ theorem DA_step_none_iff_quiescent (p : Profile M W) (s : DAState M W) :
   · have he : activeMen s = ∅ := Finset.not_nonempty_iff_eq_empty.mp h
     simp [he]
 
+theorem DA_step_none_of_terminationMeasure_eq_zero (p : Profile M W)
+    (s : DAState M W) (hzero : terminationMeasure s = 0) :
+    DA_step p s = none := by
+  by_cases hstep : DA_step p s = none
+  · exact hstep
+  · cases hs : DA_step p s with
+    | none => exact False.elim (hstep hs)
+    | some s₂ =>
+        have hdecreases := terminationMeasure_decreases p s s₂ hs
+        omega
+
+theorem runFuel_quiescent (p : Profile M W) :
+    ∀ n s, terminationMeasure s ≤ n → IsQuiescent (runFuel p n s) := by
+  intro n
+  induction n with
+  | zero =>
+      intro s hmeasure
+      have hzero : terminationMeasure s = 0 := by omega
+      have hstep := DA_step_none_of_terminationMeasure_eq_zero p s hzero
+      simpa [runFuel, hstep] using (DA_step_none_iff_quiescent p s).mp hstep
+  | succ n ih =>
+      intro s hmeasure
+      cases hstep : DA_step p s with
+      | none =>
+          simpa [runFuel, hstep] using (DA_step_none_iff_quiescent p s).mp hstep
+      | some s₂ =>
+          have hdecreases := terminationMeasure_decreases p s s₂ hstep
+          have hmeasure₂ : terminationMeasure s₂ ≤ n := by omega
+          simpa [runFuel, hstep] using ih s₂ hmeasure₂
+
+theorem runFuel_reachable (p : Profile M W) :
+    ∀ n s, terminationMeasure s ≤ n →
+      DAReaches p s (runFuel p n s) := by
+  intro n
+  induction n with
+  | zero =>
+      intro s hmeasure
+      have hzero : terminationMeasure s = 0 := by omega
+      have hstep := DA_step_none_of_terminationMeasure_eq_zero p s hzero
+      simpa [runFuel, hstep] using (DAReaches.refl s)
+  | succ n ih =>
+      intro s hmeasure
+      cases hstep : DA_step p s with
+      | none =>
+          simpa [runFuel, hstep] using (DAReaches.refl s)
+      | some s₂ =>
+          have hdecreases := terminationMeasure_decreases p s s₂ hstep
+          have hmeasure₂ : terminationMeasure s₂ ≤ n := by omega
+          simpa [runFuel, hstep] using
+            (DAReaches.trans (DAReaches.oneStep hstep) (ih s₂ hmeasure₂))
+
 theorem run_quiescent (p : Profile M W) (s : DAState M W) : IsQuiescent (run p s) := by
   unfold run
-  split
-  · rename_i hstep
-    exact (DA_step_none_iff_quiescent p s).mp hstep
-  · rename_i s₂ hstep
-    exact run_quiescent p s₂
-termination_by terminationMeasure s
-decreasing_by
-  exact terminationMeasure_decreases p s _ ‹DA_step p s = some _›
+  exact runFuel_quiescent p (terminationMeasure s + 1) s (by omega)
 
 theorem run_reachable (p : Profile M W) (s : DAState M W) :
     DAReaches p s (run p s) := by
   unfold run
-  split
-  · exact DAReaches.refl _
-  · rename_i s₂ hstep
-    exact DAReaches.trans (DAReaches.oneStep hstep) (run_reachable p s₂)
-termination_by terminationMeasure s
-decreasing_by
-  exact terminationMeasure_decreases p s _ ‹DA_step p s = some _›
+  exact runFuel_reachable p (terminationMeasure s + 1) s (by omega)
 
 /-- Deferred acceptance reaches a quiescent state after finitely many proposals. -/
 theorem exists_quiescent (p : Profile M W) :

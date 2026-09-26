@@ -55,6 +55,7 @@ expected_definitions = [
     "GS.Palomar.IsBlockingPair",
     "GS.Palomar.IsStable",
     "GS.Palomar.Achievable",
+    "GS.Palomar.terminalMatchingRun",
 ]
 if config.get("challenge_module") != "Challenge":
     raise SystemExit("error: comparator challenge_module must be Challenge")
@@ -70,8 +71,8 @@ if set(config.get("permitted_axioms", [])) != {
     raise SystemExit("error: permitted_axioms must be propext, Classical.choice, and Quot.sound")
 
 challenge = pathlib.Path("Challenge.lean").read_text(encoding="utf-8")
-if challenge.split().count("sorry") != 3:
-    raise SystemExit("error: Challenge.lean must contain exactly three theorem statement holes")
+if challenge.split().count("sorry") != 4:
+    raise SystemExit("error: Challenge.lean must contain exactly four statement holes")
 
 for path in [pathlib.Path("Solution.lean"), *sorted(pathlib.Path("GS").rglob("*.lean"))]:
     source = path.read_text(encoding="utf-8")

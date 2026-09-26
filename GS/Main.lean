@@ -47,4 +47,15 @@ end
 
 end Implementation
 
+section
+
+variable {M W : Type*}
+  [Fintype M] [Fintype W] [DecidableEq M] [DecidableEq W]
+  [Nonempty W]
+
+noncomputable def terminalMatchingRun (p : Profile M W) : Matching M W :=
+  terminalMatching p (run p initialState) (run_reachable p initialState)
+
+end
+
 end GS.Palomar

@@ -71,8 +71,7 @@ status:
     - declaration: "GS.Palomar.daStable"
       file: "Solution.lean"
       description: >-
-        The run from `initialState` reaches a quiescent state whose terminal
-        matching is stable.
+        The terminal matching produced by deferred acceptance is stable.
       sorry_count: 0
       axioms: ["propext", "Classical.choice", "Quot.sound"]
       comparator_config: "comparator.json"
@@ -161,8 +160,7 @@ alignment:
       module: "Solution.lean"
       status: "proved"
       note: >-
-        Exact binders as above; the run from `initialState` is quiescent and
-        its `terminalMatching` is stable.
+        Exact binders as above; `terminalMatchingRun p` is stable.
     - source: "Men-optimality of deferred acceptance"
       lean: "GS.Palomar.daMenOptimal"
       module: "Solution.lean"

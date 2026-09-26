@@ -15,20 +15,15 @@ theorem galeShapley (p : Profile M W) :
     ∃ μ : Matching M W, IsStable p μ := by
   exact Implementation.galeShapley p
 
-/-- The run from the initial state terminates quiescently, and its terminal
-matching is stable. -/
+/-- The terminal matching produced by deferred acceptance is stable. -/
 theorem daStable (p : Profile M W) :
-    let s := run p initialState
-    IsQuiescent s ∧
-      IsStable p
-        (terminalMatching p s (run_reachable p initialState)) := by
-  exact Implementation.daStable p
+    IsStable p (GS.Palomar.terminalMatchingRun p) := by
+  exact (Implementation.daStable p).2
 
 /-- Whenever a man is matched to w0 by the deferred-acceptance outcome, every stable-achievable partner is weakly below w0 in his preferences. -/
 theorem daMenOptimal (p : Profile M W) (m : M) {w₀ : W}
     (hterminal :
-      (terminalMatching p (run p initialState)
-        (run_reachable p initialState)).muM m = some w₀) :
+      (GS.Palomar.terminalMatchingRun p).muM m = some w₀) :
     ∀ w : W, Achievable p m w → p.prefM m w₀ w ∨ w₀ = w := by
   exact Implementation.daMenOptimal p m hterminal
 
